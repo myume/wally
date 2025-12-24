@@ -1,0 +1,2 @@
+# wally
+wallpaper manager
