@@ -61,7 +61,7 @@ impl Wallhaven {
             wallpaper_list.extend(response.data)
         }
 
-        Ok(wallpaper_list)
+        Ok(wallpaper_list.into_iter().take(limit as usize).collect())
     }
 }
 
@@ -78,7 +78,6 @@ impl WallpaperProvider for Wallhaven {
             .await?
             .into_iter()
             .map(|data| data.path)
-            .take(limit as usize)
             .collect())
     }
 

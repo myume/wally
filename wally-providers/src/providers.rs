@@ -1,5 +1,6 @@
 use reqwest::Url;
 
+pub mod pixiv;
 pub mod wallhaven;
 
 pub trait WallpaperProvider {
