@@ -6,6 +6,7 @@ use tokio::task::JoinHandle;
 use crate::providers::WallpaperProvider;
 
 const WALLHAVEN_API_URL: &str = "https://wallhaven.cc/api/v1/search";
+const ITEMS_PER_PAGE: u32 = 24;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct WallhavenData {
@@ -36,17 +37,14 @@ struct WallhavenResponse {
 
 pub struct Wallhaven {}
 
-impl WallpaperProvider for Wallhaven {
-    async fn list(&self) -> Vec<Url> {
-        todo!()
+impl Wallhaven {
+    pub fn new() -> Self {
+        Self {}
     }
-
-    async fn random(&self) -> anyhow::Result<Url> {
+    async fn fetch_list(&self, limit: u32) -> anyhow::Result<Vec<WallhavenData>> {
         let mut handles = Vec::new();
 
-        // fire off requests for 4 pages each of (usually) 24 wallpapers
-        // for a larger selection of wallpapers to choose from for increased randomness.
-        for page in 1..=4 {
+        for page in 1..=limit.div_ceil(ITEMS_PER_PAGE) {
             let handle: JoinHandle<anyhow::Result<WallhavenResponse>> = tokio::spawn(async move {
                 reqwest::get(format!("{WALLHAVEN_API_URL}?page={page}"))
                     .await?
@@ -57,15 +55,41 @@ impl WallpaperProvider for Wallhaven {
             handles.push(handle);
         }
 
-        let mut results = Vec::new();
+        let mut wallpaper_list = Vec::new();
         for handle in handles {
             let response = handle.await.context("Failed to fire request")??;
-            results.extend(response.data.into_iter().map(|data| data.path))
+            wallpaper_list.extend(response.data)
         }
-        let selected = rand::random_range(0..results.len());
 
-        Ok(results
+        Ok(wallpaper_list)
+    }
+}
+
+impl Default for Wallhaven {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WallpaperProvider for Wallhaven {
+    async fn list(&self, limit: u32) -> anyhow::Result<Vec<Url>> {
+        Ok(self
+            .fetch_list(limit)
+            .await?
+            .into_iter()
+            .map(|data| data.path)
+            .take(limit as usize)
+            .collect())
+    }
+
+    async fn random(&self) -> anyhow::Result<Url> {
+        let wallpaper_list = self.fetch_list(100).await?;
+
+        let selected = rand::random_range(0..wallpaper_list.len());
+
+        Ok(wallpaper_list
             .get(selected)
+            .map(|data| data.path.clone())
             .context("selected item does not exist")?
             .clone())
     }
@@ -77,8 +101,18 @@ mod tests {
 
     #[ignore]
     #[tokio::test]
+    async fn test_list_wallpapers() {
+        let provider = Wallhaven::new();
+        let limit = 50;
+        let list = provider.list(limit).await;
+        assert!(list.is_ok(), "{:?}", list);
+        assert!(list.unwrap().len() == limit as usize);
+    }
+
+    #[ignore]
+    #[tokio::test]
     async fn test_get_random_wallpaper() {
-        let provider = Wallhaven {};
+        let provider = Wallhaven::new();
         let url = provider.random().await;
         assert!(url.is_ok(), "{:?}", url);
     }
