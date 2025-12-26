@@ -9,12 +9,16 @@ use wally_providers::providers::{WallpaperProvider, pixiv::Pixiv, wallhaven::Wal
 struct Cli {
     /// Choose a random wallpaper from the source
     #[arg(long)]
-    random: bool,
+    mode: Mode,
 
     /// Save the wallpaper to the the specific output path, otherwise the wallpaper is saved in the
     /// default location
     #[arg(long)]
     save: bool,
+
+    /// The location of the config file
+    #[arg(long, default_value = "./wally.kdl")]
+    config: PathBuf,
 
     /// The path to save wallpapers to
     #[arg(short, long)]
@@ -26,6 +30,11 @@ struct Cli {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum Mode {
+    Random,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum WallpaperSource {
     Wallhaven,
     Pixiv,
@@ -34,6 +43,13 @@ pub enum WallpaperSource {
 #[tokio::main]
 async fn main() {
     let args = Cli::parse();
+    let config = match wally_config::read_config(&args.config) {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("Failed to read config: {e}");
+            return;
+        }
+    };
 
     let all_sources = WallpaperSource::value_variants();
     let source = args
@@ -45,11 +61,16 @@ async fn main() {
         WallpaperSource::Pixiv => Box::new(Pixiv::new()),
     };
 
-    if args.random {
-        let random = provider.random().await;
-        match random {
-            Ok(url) => println!("{url}"),
-            Err(e) => eprintln!("Failed to fetch random wallpaper: {e}"),
+    let wallpaper_urls = match args.mode {
+        Mode::Random => {
+            let random = provider.random().await;
+            match random {
+                Ok(url) => vec![url],
+                Err(e) => {
+                    eprintln!("Failed to fetch random wallpaper: {e}");
+                    return;
+                }
+            }
         }
-    }
+    };
 }

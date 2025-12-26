@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "wally",
+    "wally-config",
     "wally-providers"
 ] 
 resolver = "3"
@@ -20,3 +21,5 @@ tempfile = "3.0"
 regex = "1.0"
 clap = "4.5.53"
 async-trait = "0.1.89"
+facet = "0.34.0"
+facet-kdl = "0.34.0"

@@ -1,0 +1,9 @@
+[package]
+name = "wally-config"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+facet.workspace = true
+facet-kdl.workspace = true
+anyhow.workspace = true

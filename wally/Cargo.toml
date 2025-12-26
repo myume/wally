@@ -6,5 +6,6 @@ edition.workspace = true
 [dependencies]
 clap = {workspace = true, features = ["derive"]}
 wally-providers = { path = "../wally-providers" }
+wally-config = { path = "../wally-config" }
 rand.workspace = true
 tokio.workspace = true
