@@ -1,9 +1,11 @@
+use std::path::{Path, PathBuf};
+
 use anyhow::Context;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::providers::WallpaperProvider;
+use crate::{providers::WallpaperProvider, util::save_wallpaper};
 
 const WALLHAVEN_API_URL: &str = "https://wallhaven.cc/api/v1/search";
 const ITEMS_PER_PAGE: u32 = 24;
@@ -92,10 +94,26 @@ impl WallpaperProvider for Wallhaven {
             .context("selected item does not exist")?
             .clone())
     }
+
+    async fn download(&self, source: &Url, dest: &Path) -> anyhow::Result<PathBuf> {
+        let image_bytes = reqwest::get(source.clone()).await?.bytes().await?;
+
+        let filename = source
+            .path_segments()
+            .context("Could not get filename")?
+            .next_back()
+            .context("Missing filename")?;
+
+        let output_path = dest.join(filename);
+        save_wallpaper(&image_bytes, &output_path).await?;
+        Ok(output_path)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use tempfile::tempdir;
+
     use super::*;
 
     #[ignore]
@@ -114,5 +132,15 @@ mod tests {
         let provider = Wallhaven::new();
         let url = provider.random().await;
         assert!(url.is_ok(), "{:?}", url);
+    }
+
+    #[ignore]
+    #[tokio::test]
+    async fn test_download() {
+        let provider = Wallhaven::new();
+        let source = provider.random().await.unwrap();
+        let dir = tempdir().expect("Should create a tempdir");
+        let filepath = provider.download(&source, dir.path()).await.unwrap();
+        assert!(filepath.exists());
     }
 }

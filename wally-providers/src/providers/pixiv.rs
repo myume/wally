@@ -1,9 +1,12 @@
+use std::path::{Path, PathBuf};
+
 use anyhow::Context;
-use reqwest::Url;
+use regex::Regex;
+use reqwest::{Url, header::REFERER};
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::providers::WallpaperProvider;
+use crate::{providers::WallpaperProvider, util::save_wallpaper};
 
 const PIXIV_BASE_URL: &str = "https://www.pixiv.net/ranking.php";
 const ITEMS_PER_PAGE: u32 = 50;
@@ -86,10 +89,38 @@ impl WallpaperProvider for Pixiv {
             .context("selected item does not exist")?
             .clone())
     }
+
+    async fn download(&self, source: &Url, dest: &Path) -> anyhow::Result<PathBuf> {
+        let regex = Regex::new(r"c/\d+x\d+/img-master").expect("invalid regex");
+        let url = regex
+            .replace(source.as_str(), "img-original")
+            .replace("_master1200", "");
+
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(REFERER, PIXIV_BASE_URL.parse()?);
+
+        let client = reqwest::Client::builder()
+            .default_headers(headers)
+            .build()?;
+
+        let response = client.get(&url).send().await?.error_for_status()?;
+
+        let image_bytes = response.bytes().await?;
+        let filename = url
+            .split("/")
+            .last()
+            .context("unable to extract filename from url")?;
+
+        let output_path = dest.join(filename);
+        save_wallpaper(&image_bytes, &output_path).await?;
+        Ok(output_path)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use tempfile::tempdir;
+
     use super::*;
 
     #[ignore]
@@ -109,5 +140,15 @@ mod tests {
         let url = provider.random().await;
         assert!(url.is_ok(), "{:?}", url);
         dbg!(url.unwrap().to_string());
+    }
+
+    #[ignore]
+    #[tokio::test]
+    async fn test_download() {
+        let provider = Pixiv::new();
+        let source = provider.random().await.unwrap();
+        let dir = tempdir().expect("Should create a tempdir");
+        let filepath = provider.download(&source, dir.path()).await.unwrap();
+        assert!(filepath.exists());
     }
 }

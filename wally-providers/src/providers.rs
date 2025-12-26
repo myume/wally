@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use reqwest::Url;
 
 pub mod pixiv;
@@ -9,4 +11,7 @@ pub trait WallpaperProvider {
 
     /// Retreive a random wallpaper url
     fn random(&self) -> impl Future<Output = anyhow::Result<Url>>;
+
+    /// Download the wallpaper from the url to the specified destination folder.
+    fn download(&self, source: &Url, dest: &Path) -> impl Future<Output = anyhow::Result<PathBuf>>;
 }
