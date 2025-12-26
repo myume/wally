@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
+use async_trait::async_trait;
 use regex::Regex;
 use reqwest::{Url, header::REFERER};
 use serde::{Deserialize, Serialize};
@@ -67,6 +68,7 @@ impl Default for Pixiv {
     }
 }
 
+#[async_trait]
 impl WallpaperProvider for Pixiv {
     async fn list(&self, limit: u32) -> anyhow::Result<Vec<reqwest::Url>> {
         let wallpaper_list = self

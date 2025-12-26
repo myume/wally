@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
+use async_trait::async_trait;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
@@ -73,6 +74,7 @@ impl Default for Wallhaven {
     }
 }
 
+#[async_trait]
 impl WallpaperProvider for Wallhaven {
     async fn list(&self, limit: u32) -> anyhow::Result<Vec<Url>> {
         Ok(self
