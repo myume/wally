@@ -46,7 +46,7 @@ async fn main() {
     let config = match wally_config::read_config(&args.config) {
         Ok(config) => config,
         Err(e) => {
-            eprintln!("Failed to read config: {e}");
+            eprintln!("{:?}", e.wrap_err("Failed to read config"));
             return;
         }
     };

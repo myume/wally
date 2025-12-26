@@ -6,4 +6,4 @@ edition.workspace = true
 [dependencies]
 facet.workspace = true
 facet-kdl.workspace = true
-anyhow.workspace = true
+miette.workspace = true
