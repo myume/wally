@@ -1,0 +1,10 @@
+[package]
+name = "wally"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clap = {workspace = true, features = ["derive"]}
+wally-providers = { path = "../wally-providers" }
+rand.workspace = true
+tokio.workspace = true
