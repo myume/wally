@@ -1,4 +1,4 @@
-use std::{path::PathBuf, process::ExitCode};
+use std::{fs, path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use wally_providers::providers::{WallpaperProvider, pixiv::Pixiv, wallhaven::Wallhaven};
@@ -60,6 +60,8 @@ async fn main() -> ExitCode {
         .source
         .unwrap_or(all_sources[rand::random_range(..all_sources.len())]);
 
+    eprintln!("pulling wallpapers from {:?}", source);
+
     let provider: Box<dyn WallpaperProvider> = match source {
         WallpaperSource::Wallhaven => Box::new(Wallhaven::new()),
         WallpaperSource::Pixiv => Box::new(Pixiv::new()),
@@ -82,12 +84,21 @@ async fn main() -> ExitCode {
         },
     };
 
+    let output_dir = config.general.output_dir.value;
+    if args.save {
+        if !output_dir.exists() {
+            eprintln!("wallpaper output dir does not exist, creating dir...");
+            if let Err(e) = fs::create_dir(&output_dir) {
+                eprintln!("Failed to create output dir: {e}");
+            }
+        }
+        eprintln!("saving wallpapers to {}", output_dir.display());
+    }
+
     for url in wallpaper_urls {
         if args.save {
-            if let Err(e) = provider
-                .download(&url, &config.general.output_dir.value)
-                .await
-            {
+            eprintln!("downloading wallpaper from {url}");
+            if let Err(e) = provider.download(&url, &output_dir).await {
                 eprintln!("Failed to download wallpaper from {url}: {e}")
             }
         } else {
