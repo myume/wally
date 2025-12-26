@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use wally_providers::providers::{WallpaperProvider, pixiv::Pixiv, wallhaven::Wallhaven};
 
 /// Wally the wallpaper picker
@@ -8,7 +8,7 @@ use wally_providers::providers::{WallpaperProvider, pixiv::Pixiv, wallhaven::Wal
 #[command(version, about, long_about = None)]
 struct Cli {
     /// Choose a random wallpaper from the source
-    #[arg(long)]
+    #[command(subcommand)]
     mode: Mode,
 
     /// Save the wallpaper to the the specific output path, otherwise the wallpaper is saved in the
@@ -29,9 +29,13 @@ struct Cli {
     source: Option<WallpaperSource>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Subcommand)]
 enum Mode {
     Random,
+    List {
+        #[arg(long, default_value_t = 10)]
+        limit: u32,
+    },
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -62,15 +66,32 @@ async fn main() {
     };
 
     let wallpaper_urls = match args.mode {
-        Mode::Random => {
-            let random = provider.random().await;
-            match random {
-                Ok(url) => vec![url],
-                Err(e) => {
-                    eprintln!("Failed to fetch random wallpaper: {e}");
-                    return;
-                }
+        Mode::Random => match provider.random().await {
+            Ok(url) => vec![url],
+            Err(e) => {
+                eprintln!("Failed to fetch random wallpaper: {e}");
+                return;
             }
-        }
+        },
+        Mode::List { limit } => match provider.list(limit).await {
+            Ok(list) => list,
+            Err(e) => {
+                eprintln!("Failed to fetch wallpapers: {e}");
+                return;
+            }
+        },
     };
+
+    for url in wallpaper_urls {
+        if args.save {
+            if let Err(e) = provider
+                .download(&url, &config.general.output_dir.value)
+                .await
+            {
+                eprintln!("Failed to download wallpaper from {url}: {e}")
+            }
+        } else {
+            println!("{}", url);
+        };
+    }
 }
