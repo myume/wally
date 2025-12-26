@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use wally_providers::providers::{WallpaperProvider, pixiv::Pixiv, wallhaven::Wallhaven};
@@ -45,13 +45,13 @@ pub enum WallpaperSource {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     let args = Cli::parse();
     let config = match wally_config::read_config(&args.config) {
         Ok(config) => config,
         Err(e) => {
             eprintln!("{:?}", e.wrap_err("Failed to read config"));
-            return;
+            return ExitCode::FAILURE;
         }
     };
 
@@ -70,14 +70,14 @@ async fn main() {
             Ok(url) => vec![url],
             Err(e) => {
                 eprintln!("Failed to fetch random wallpaper: {e}");
-                return;
+                return ExitCode::FAILURE;
             }
         },
         Mode::List { limit } => match provider.list(limit).await {
             Ok(list) => list,
             Err(e) => {
                 eprintln!("Failed to fetch wallpapers: {e}");
-                return;
+                return ExitCode::FAILURE;
             }
         },
     };
@@ -94,4 +94,6 @@ async fn main() {
             println!("{}", url);
         };
     }
+
+    ExitCode::SUCCESS
 }
