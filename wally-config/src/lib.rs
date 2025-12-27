@@ -4,13 +4,18 @@ use facet::Facet;
 use facet_kdl as kdl;
 use miette::{IntoDiagnostic, WrapErr};
 
-mod general;
+pub mod general;
+pub mod util;
+pub mod wallhaven;
 
 #[derive(Facet)]
 #[facet(deny_unknown_fields)]
 pub struct Config {
     #[facet(kdl::child)]
     pub general: general::GeneralConfig,
+
+    #[facet(kdl::child)]
+    pub wallhaven: wallhaven::WallhavenConfig,
 }
 
 pub fn read_config(config_path: &Path) -> miette::Result<Config> {

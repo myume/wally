@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-
 use facet::Facet;
 use facet_kdl as kdl;
+
+use crate::util::KdlPath;
 
 #[derive(Facet)]
 #[facet(deny_unknown_fields)]
@@ -20,10 +20,4 @@ pub struct GeneralConfig {
 pub struct Command {
     #[facet(kdl::argument)]
     pub command: String,
-}
-
-#[derive(Facet)]
-pub struct KdlPath {
-    #[facet(kdl::argument)]
-    pub value: PathBuf,
 }

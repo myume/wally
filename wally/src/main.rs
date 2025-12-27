@@ -71,7 +71,7 @@ async fn main() -> ExitCode {
     eprintln!("pulling wallpapers from {:?}", source);
 
     let provider: Box<dyn WallpaperProvider> = match source {
-        WallpaperSource::Wallhaven => Box::new(Wallhaven::new()),
+        WallpaperSource::Wallhaven => Box::new(Wallhaven::new(config.wallhaven)),
         WallpaperSource::Pixiv => Box::new(Pixiv::new()),
     };
 
@@ -106,7 +106,6 @@ async fn main() -> ExitCode {
     for url in wallpaper_urls {
         if args.save {
             eprintln!("downloading wallpaper from {url}");
-
             match provider.download(&url, &output_dir).await {
                 Ok(path) => match args.mode {
                     Mode::Random {

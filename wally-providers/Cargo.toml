@@ -12,6 +12,7 @@ serde.workspace = true
 rand.workspace = true
 regex.workspace = true
 async-trait.workspace = true
+wally-config = { path = "../wally-config" }
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
+use wally_config::wallhaven::WallhavenConfig;
 
 use crate::{providers::WallpaperProvider, util::save_wallpaper};
 
@@ -38,22 +39,51 @@ struct WallhavenResponse {
     meta: WallhavenMeta,
 }
 
-pub struct Wallhaven {}
+pub struct Wallhaven {
+    config: WallhavenConfig,
+}
 
 impl Wallhaven {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(config: WallhavenConfig) -> Self {
+        Self { config }
     }
+
+    fn category_bits(&self) -> String {
+        let mut bits = String::new();
+        if self.config.categories.general.value {
+            bits.push('1');
+        } else {
+            bits.push('0');
+        }
+
+        if self.config.categories.anime.value {
+            bits.push('1');
+        } else {
+            bits.push('0');
+        }
+
+        if self.config.categories.people.value {
+            bits.push('1');
+        } else {
+            bits.push('0');
+        }
+
+        bits
+    }
+
     async fn fetch_list(&self, limit: u32) -> anyhow::Result<Vec<WallhavenData>> {
         let mut handles = Vec::new();
 
         for page in 1..=limit.div_ceil(ITEMS_PER_PAGE) {
+            let category = self.category_bits();
             let handle: JoinHandle<anyhow::Result<WallhavenResponse>> = tokio::spawn(async move {
-                reqwest::get(format!("{WALLHAVEN_API_URL}?page={page}"))
-                    .await?
-                    .json()
-                    .await
-                    .context("Unable to parse wallhaven response into json")
+                reqwest::get(format!(
+                    "{WALLHAVEN_API_URL}?page={page}&categories={category}"
+                ))
+                .await?
+                .json()
+                .await
+                .context("Unable to parse wallhaven response into json")
             });
             handles.push(handle);
         }
@@ -65,12 +95,6 @@ impl Wallhaven {
         }
 
         Ok(wallpaper_list.into_iter().take(limit as usize).collect())
-    }
-}
-
-impl Default for Wallhaven {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -115,13 +139,22 @@ impl WallpaperProvider for Wallhaven {
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
+    use wally_config::{util::KdlBool, wallhaven::WallhavenCategories};
 
     use super::*;
+
+    const CONFIG: WallhavenConfig = WallhavenConfig {
+        categories: WallhavenCategories {
+            general: KdlBool { value: true },
+            anime: KdlBool { value: true },
+            people: KdlBool { value: true },
+        },
+    };
 
     #[ignore]
     #[tokio::test]
     async fn test_list_wallpapers() {
-        let provider = Wallhaven::new();
+        let provider = Wallhaven::new(CONFIG);
         let limit = 50;
         let list = provider.list(limit).await;
         assert!(list.is_ok(), "{:?}", list);
@@ -131,7 +164,7 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_get_random_wallpaper() {
-        let provider = Wallhaven::new();
+        let provider = Wallhaven::new(CONFIG);
         let url = provider.random().await;
         assert!(url.is_ok(), "{:?}", url);
     }
@@ -139,7 +172,7 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_download() {
-        let provider = Wallhaven::new();
+        let provider = Wallhaven::new(CONFIG);
         let source = provider.random().await.unwrap();
         let dir = tempdir().expect("Should create a tempdir");
         let filepath = provider.download(&source, dir.path()).await.unwrap();
