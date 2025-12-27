@@ -4,7 +4,9 @@ use wally_config::{
     util::KdlBool,
     wallhaven::{WallhavenCategories, WallhavenConfig},
 };
-use wally_providers::providers::{WallpaperProvider, pixiv::Pixiv, wallhaven::Wallhaven};
+use wally_providers::providers::{
+    WallpaperProvider, konachan::Konachan, pixiv::Pixiv, wallhaven::Wallhaven,
+};
 
 macro_rules! test_provider {
     ($test_name:ident, $provider:block) => {
@@ -52,3 +54,5 @@ test_provider!(wallhaven, {
         },
     })
 });
+
+test_provider!(konachan, { Konachan::new() });

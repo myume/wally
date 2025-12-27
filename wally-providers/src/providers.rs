@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use async_trait::async_trait;
 use reqwest::Url;
 
+pub mod konachan;
 pub mod pixiv;
 pub mod wallhaven;
 

@@ -6,7 +6,9 @@ use std::{
 };
 
 use clap::{Parser, Subcommand, ValueEnum};
-use wally_providers::providers::{WallpaperProvider, pixiv::Pixiv, wallhaven::Wallhaven};
+use wally_providers::providers::{
+    WallpaperProvider, konachan::Konachan, pixiv::Pixiv, wallhaven::Wallhaven,
+};
 
 /// Wally the wallpaper picker
 #[derive(Parser, Debug)]
@@ -50,6 +52,7 @@ enum Mode {
 pub enum WallpaperSource {
     Wallhaven,
     Pixiv,
+    Konachan,
 }
 
 #[tokio::main]
@@ -73,6 +76,7 @@ async fn main() -> ExitCode {
     let provider: Box<dyn WallpaperProvider> = match source {
         WallpaperSource::Wallhaven => Box::new(Wallhaven::new(config.wallhaven)),
         WallpaperSource::Pixiv => Box::new(Pixiv::new()),
+        WallpaperSource::Konachan => Box::new(Konachan::new()),
     };
 
     let wallpaper_urls = match args.mode {

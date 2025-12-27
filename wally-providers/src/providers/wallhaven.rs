@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 use wally_config::wallhaven::WallhavenConfig;
 
-use crate::{providers::WallpaperProvider, util::save_wallpaper};
+use crate::{providers::WallpaperProvider, util::download_wallpaper};
 
 const WALLHAVEN_API_URL: &str = "https://wallhaven.cc/api/v1/search";
 const ITEMS_PER_PAGE: u32 = 24;
@@ -122,16 +122,6 @@ impl WallpaperProvider for Wallhaven {
     }
 
     async fn download(&self, source: &Url, dest: &Path) -> anyhow::Result<PathBuf> {
-        let image_bytes = reqwest::get(source.clone()).await?.bytes().await?;
-
-        let filename = source
-            .path_segments()
-            .context("Could not get filename")?
-            .next_back()
-            .context("Missing filename")?;
-
-        let output_path = dest.join(filename);
-        save_wallpaper(&image_bytes, &output_path).await?;
-        Ok(output_path)
+        download_wallpaper(source, dest).await
     }
 }
