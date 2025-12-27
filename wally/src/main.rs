@@ -1,4 +1,5 @@
 use anyhow::{Context, anyhow};
+use reqwest::Url;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -34,14 +35,15 @@ struct Cli {
     /// The source to choose a wallpaper from. If unspecified, a random source is chosen
     #[arg(short, long)]
     source: Option<WallpaperSource>,
+
+    /// Set the wallpaper. If there are multiple wallpapers, randomly choose one.
+    #[arg(long)]
+    set_wallpaper: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Subcommand)]
 enum Mode {
-    Random {
-        #[arg(long)]
-        set_wallpaper: bool,
-    },
+    Random,
     List {
         #[arg(long, default_value_t = 10)]
         limit: u32,
@@ -80,7 +82,7 @@ async fn main() -> ExitCode {
     };
 
     let wallpaper_urls = match args.mode {
-        Mode::Random { .. } => match provider.random().await {
+        Mode::Random => match provider.random().await {
             Ok(url) => vec![url],
             Err(e) => {
                 eprintln!("Failed to fetch random wallpaper: {e}");
@@ -107,28 +109,35 @@ async fn main() -> ExitCode {
         eprintln!("saving wallpapers to {}", output_dir.display());
     }
 
-    for url in wallpaper_urls {
-        if args.save {
-            eprintln!("downloading wallpaper from {url}");
-            match provider.download(&url, &output_dir).await {
-                Ok(path) => match args.mode {
-                    Mode::Random {
-                        set_wallpaper: should_set,
-                    } if should_set => {
-                        if let Err(e) = set_wallpaper(&config.general.set_command.command, &path) {
-                            eprintln!("{e}");
-                        }
-                    }
-                    _ => (),
-                },
-                Err(e) => eprintln!("Failed to download wallpaper from {url}: {e}"),
+    if args.save {
+        let image_paths = download_wallpapers(wallpaper_urls, provider, &output_dir).await;
+        if args.set_wallpaper {
+            let selected_image = &image_paths[rand::random_range(..image_paths.len())];
+            if let Err(e) = set_wallpaper(&config.general.set_command.command, selected_image) {
+                println!("Failed to set wallpaper: {e}");
             }
-        } else {
-            println!("{}", url);
-        };
+        }
+    } else {
+        wallpaper_urls.iter().for_each(|url| println!("{url}"));
     }
 
     ExitCode::SUCCESS
+}
+
+async fn download_wallpapers(
+    wallpaper_urls: Vec<Url>,
+    provider: Box<dyn WallpaperProvider>,
+    output_dir: &Path,
+) -> Vec<PathBuf> {
+    let mut downloaded_images = Vec::new();
+    for url in wallpaper_urls {
+        eprintln!("downloading wallpaper from {url}");
+        match provider.download(&url, output_dir).await {
+            Ok(path) => downloaded_images.push(path),
+            Err(e) => eprintln!("Failed to download wallpaper from {url}: {e}"),
+        }
+    }
+    downloaded_images
 }
 
 fn set_wallpaper(command: &str, img_path: &Path) -> anyhow::Result<()> {

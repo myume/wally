@@ -10,3 +10,4 @@ wally-config = { path = "../wally-config" }
 rand.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
+reqwest.workspace = true

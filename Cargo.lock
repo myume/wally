@@ -1837,6 +1837,7 @@ dependencies = [
  "anyhow",
  "clap",
  "rand",
+ "reqwest",
  "tokio",
  "wally-config",
  "wally-providers",
