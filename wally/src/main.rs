@@ -1,4 +1,8 @@
-use std::{fs, path::PathBuf, process::ExitCode};
+use std::{
+    fs,
+    path::PathBuf,
+    process::{Command, ExitCode},
+};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use wally_providers::providers::{WallpaperProvider, pixiv::Pixiv, wallhaven::Wallhaven};
@@ -31,7 +35,10 @@ struct Cli {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Subcommand)]
 enum Mode {
-    Random,
+    Random {
+        #[arg(long)]
+        set_wallpaper: bool,
+    },
     List {
         #[arg(long, default_value_t = 10)]
         limit: u32,
@@ -68,7 +75,7 @@ async fn main() -> ExitCode {
     };
 
     let wallpaper_urls = match args.mode {
-        Mode::Random => match provider.random().await {
+        Mode::Random { .. } => match provider.random().await {
             Ok(url) => vec![url],
             Err(e) => {
                 eprintln!("Failed to fetch random wallpaper: {e}");
@@ -98,8 +105,31 @@ async fn main() -> ExitCode {
     for url in wallpaper_urls {
         if args.save {
             eprintln!("downloading wallpaper from {url}");
-            if let Err(e) = provider.download(&url, &output_dir).await {
-                eprintln!("Failed to download wallpaper from {url}: {e}")
+
+            match provider.download(&url, &output_dir).await {
+                Ok(path) => {
+                    if let Mode::Random { set_wallpaper } = args.mode
+                        && set_wallpaper
+                    {
+                        let command = config.general.set_command.command.replace(
+                            "{{path}}",
+                            path.to_str().expect("path should be valid string"),
+                        );
+                        let parts: Vec<&str> = command.split(" ").collect();
+
+                        let Some(program) = parts.first() else {
+                            eprintln!("Missing program in set command");
+                            return ExitCode::FAILURE;
+                        };
+
+                        eprintln!("Setting wallpaper with command \"{command}\"");
+                        if let Err(e) = Command::new(program).args(&parts[1..]).output() {
+                            eprintln!("Failed to set wallpaper: {e}");
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+                Err(e) => eprintln!("Failed to download wallpaper from {url}: {e}"),
             }
         } else {
             println!("{}", url);
