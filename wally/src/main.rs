@@ -1,6 +1,7 @@
+use anyhow::{Context, anyhow};
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, ExitCode},
 };
 
@@ -107,28 +108,16 @@ async fn main() -> ExitCode {
             eprintln!("downloading wallpaper from {url}");
 
             match provider.download(&url, &output_dir).await {
-                Ok(path) => {
-                    if let Mode::Random { set_wallpaper } = args.mode
-                        && set_wallpaper
-                    {
-                        let command = config.general.set_command.command.replace(
-                            "{{path}}",
-                            path.to_str().expect("path should be valid string"),
-                        );
-                        let parts: Vec<&str> = command.split(" ").collect();
-
-                        let Some(program) = parts.first() else {
-                            eprintln!("Missing program in set command");
-                            return ExitCode::FAILURE;
-                        };
-
-                        eprintln!("Setting wallpaper with command \"{command}\"");
-                        if let Err(e) = Command::new(program).args(&parts[1..]).output() {
-                            eprintln!("Failed to set wallpaper: {e}");
-                            return ExitCode::FAILURE;
+                Ok(path) => match args.mode {
+                    Mode::Random {
+                        set_wallpaper: should_set,
+                    } if should_set => {
+                        if let Err(e) = set_wallpaper(&config.general.set_command.command, &path) {
+                            eprintln!("{e}");
                         }
                     }
-                }
+                    _ => (),
+                },
                 Err(e) => eprintln!("Failed to download wallpaper from {url}: {e}"),
             }
         } else {
@@ -137,4 +126,23 @@ async fn main() -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+fn set_wallpaper(command: &str, img_path: &Path) -> anyhow::Result<()> {
+    let command = command.replace(
+        "{{path}}",
+        img_path.to_str().expect("path should be valid string"),
+    );
+    let parts: Vec<&str> = command.split(" ").collect();
+
+    let Some(program) = parts.first() else {
+        return Err(anyhow!("Missing program in set command"));
+    };
+
+    eprintln!("Setting wallpaper with command \"{command}\"");
+    Command::new(program)
+        .args(&parts[1..])
+        .output()
+        .context("Failed to set wallpaper")?;
+    Ok(())
 }
