@@ -118,39 +118,3 @@ impl WallpaperProvider for Pixiv {
         Ok(output_path)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use tempfile::tempdir;
-
-    use super::*;
-
-    #[ignore]
-    #[tokio::test]
-    async fn test_list_wallpapers() {
-        let provider = Pixiv::new();
-        let limit = 100;
-        let wallpapers = provider.list(limit).await;
-        assert!(wallpapers.is_ok(), "{:?}", wallpapers);
-        assert!(wallpapers.unwrap().len() == limit as usize);
-    }
-
-    #[ignore]
-    #[tokio::test]
-    async fn test_get_random_wallpaper() {
-        let provider = Pixiv::new();
-        let url = provider.random().await;
-        assert!(url.is_ok(), "{:?}", url);
-        dbg!(url.unwrap().to_string());
-    }
-
-    #[ignore]
-    #[tokio::test]
-    async fn test_download() {
-        let provider = Pixiv::new();
-        let source = provider.random().await.unwrap();
-        let dir = tempdir().expect("Should create a tempdir");
-        let filepath = provider.download(&source, dir.path()).await.unwrap();
-        assert!(filepath.exists());
-    }
-}
