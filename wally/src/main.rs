@@ -3,7 +3,7 @@ use reqwest::Url;
 use std::{
     fs::{self, remove_file},
     path::{Path, PathBuf},
-    process::{Command, ExitCode},
+    process::Command,
 };
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -64,14 +64,11 @@ pub enum WallpaperSource {
 }
 
 #[tokio::main]
-async fn main() -> ExitCode {
+async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
     let config = match wally_config::read_config(&args.config) {
         Ok(config) => config,
-        Err(e) => {
-            eprintln!("{:?}", e.wrap_err("Failed to read config"));
-            return ExitCode::FAILURE;
-        }
+        Err(e) => return Err(anyhow!("{:?}", e.wrap_err("Failed to read config"))),
     };
 
     let all_sources = WallpaperSource::value_variants();
@@ -88,53 +85,34 @@ async fn main() -> ExitCode {
     };
 
     let wallpaper_urls = match args.mode {
-        Mode::Random => match provider.random().await {
-            Ok(url) => vec![url],
-            Err(e) => {
-                eprintln!("Failed to fetch random wallpaper: {e}");
-                return ExitCode::FAILURE;
-            }
-        },
-        Mode::List { limit } => match provider.list(limit).await {
-            Ok(list) => list,
-            Err(e) => {
-                eprintln!("Failed to fetch wallpapers: {e}");
-                return ExitCode::FAILURE;
-            }
-        },
+        Mode::Random => vec![provider.random().await?],
+        Mode::List { limit } => provider.list(limit).await?,
     };
 
     let output_dir = args.output_path.unwrap_or(config.general.output_dir.value);
     if args.save || args.set_wallpaper {
         if !output_dir.exists() {
             eprintln!("wallpaper output dir does not exist, creating dir...");
-            if let Err(e) = fs::create_dir(&output_dir) {
-                eprintln!("Failed to create output dir: {e}");
-                return ExitCode::FAILURE;
-            }
+            fs::create_dir(&output_dir).context("Failed to create output dir")?;
         }
 
         eprintln!("saving wallpapers to {}", output_dir.display());
         let image_paths = download_wallpapers(wallpaper_urls, provider, &output_dir).await;
         if args.set_wallpaper {
             let selected_image = &image_paths[rand::random_range(..image_paths.len())];
-            if let Err(e) = set_wallpaper(&config.general.set_command.command, selected_image) {
-                eprintln!("Failed to set wallpaper: {e}");
-                return ExitCode::FAILURE;
-            }
+            set_wallpaper(&config.general.set_command.command, selected_image)
+                .context("Failed to set wallpaper")?
         }
     } else {
         wallpaper_urls.iter().for_each(|url| println!("{url}"));
     }
 
-    if args.evict_oldest
-        && let Err(e) = evict_oldest(&output_dir, config.general.max_downloaded.value as usize)
-    {
-        eprintln!("Failed to evict extra wallpapers: {e}");
-        return ExitCode::FAILURE;
+    if args.evict_oldest {
+        evict_oldest(&output_dir, config.general.max_downloaded.value as usize)
+            .context("Failed to evict wallpapers")?;
     }
 
-    ExitCode::SUCCESS
+    Ok(())
 }
 
 fn evict_oldest(output_dir: &Path, max_downloaded: usize) -> anyhow::Result<()> {
