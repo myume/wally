@@ -78,7 +78,7 @@ async fn main() -> ExitCode {
     let provider: Box<dyn WallpaperProvider> = match source {
         WallpaperSource::Wallhaven => Box::new(Wallhaven::new(config.wallhaven)),
         WallpaperSource::Pixiv => Box::new(Pixiv::new()),
-        WallpaperSource::Konachan => Box::new(Konachan::new()),
+        WallpaperSource::Konachan => Box::new(Konachan::new(config.konachan)),
     };
 
     let wallpaper_urls = match args.mode {

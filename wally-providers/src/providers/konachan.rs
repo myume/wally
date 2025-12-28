@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use async_trait::async_trait;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
+use wally_config::konachan::KonachanConfig;
 
 use crate::{providers::WallpaperProvider, util::download_wallpaper};
 
@@ -15,28 +16,39 @@ struct KonachanItem {
     file_url: Url,
     width: u32,
     height: u32,
+    rating: String,
 }
 
-pub struct Konachan {}
+pub struct Konachan {
+    config: KonachanConfig,
+}
 
 impl Konachan {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(config: KonachanConfig) -> Self {
+        Self { config }
     }
 
     async fn fetch_list(&self, limit: u32) -> anyhow::Result<Vec<KonachanItem>> {
-        Ok(
-            reqwest::get(format!("{KONACHAN_BASE_URL}/post.json?limit={limit}"))
-                .await?
-                .json()
-                .await?,
-        )
-    }
-}
+        let mut wallpapers = Vec::new();
+        let mut page = 1;
+        while wallpapers.len() < limit as usize {
+            let mut response: Vec<KonachanItem> = reqwest::get(format!(
+                "{KONACHAN_BASE_URL}/post.json?limit={}&page={page}",
+                limit.min(100)
+            ))
+            .await?
+            .json()
+            .await?;
 
-impl Default for Konachan {
-    fn default() -> Self {
-        Self::new()
+            if !self.config.explicit.value {
+                response.retain(|item| item.rating == "s");
+            }
+
+            wallpapers.extend(response);
+            page += 1;
+        }
+
+        Ok(wallpapers.into_iter().take(limit as usize).collect())
     }
 }
 

@@ -55,4 +55,8 @@ test_provider!(wallhaven, {
     })
 });
 
-test_provider!(konachan, { Konachan::new() });
+test_provider!(konachan, {
+    Konachan::new(wally_config::konachan::KonachanConfig {
+        explicit: KdlBool { value: false },
+    })
+});

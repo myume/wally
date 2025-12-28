@@ -5,6 +5,7 @@ use facet_kdl as kdl;
 use miette::{IntoDiagnostic, WrapErr};
 
 pub mod general;
+pub mod konachan;
 pub mod util;
 pub mod wallhaven;
 
@@ -16,6 +17,9 @@ pub struct Config {
 
     #[facet(kdl::child)]
     pub wallhaven: wallhaven::WallhavenConfig,
+
+    #[facet(kdl::child)]
+    pub konachan: konachan::KonachanConfig,
 }
 
 pub fn read_config(config_path: &Path) -> miette::Result<Config> {
