@@ -118,11 +118,14 @@ async fn main() -> anyhow::Result<()> {
 fn evict_oldest(output_dir: &Path, max_downloaded: usize) -> anyhow::Result<()> {
     let mut wallpaper_files = Vec::new();
     for entry in output_dir.read_dir().context("failed to read output dir")? {
-        if let Ok(entry) = entry
-            && let Ok(metadata) = entry.metadata()
-        {
-            wallpaper_files.push((entry.path(), metadata.modified()?));
-        }
+        let entry = entry.context("failed to read wallpaper file")?;
+        let metadata = entry.metadata().context("could not read file metadata")?;
+        wallpaper_files.push((
+            entry.path(),
+            metadata
+                .modified()
+                .context("could not read wallpaper modified time")?,
+        ));
     }
 
     if wallpaper_files.len() > max_downloaded {
