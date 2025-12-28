@@ -98,7 +98,7 @@ async fn main() -> ExitCode {
         },
     };
 
-    let output_dir = config.general.output_dir.value;
+    let output_dir = args.output_path.unwrap_or(config.general.output_dir.value);
     if args.save {
         if !output_dir.exists() {
             eprintln!("wallpaper output dir does not exist, creating dir...");
