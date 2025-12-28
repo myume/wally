@@ -14,3 +14,9 @@ pub struct KdlBool {
     #[facet(kdl::argument)]
     pub value: bool,
 }
+
+#[derive(Facet)]
+pub struct Kdlu32 {
+    #[facet(kdl::argument)]
+    pub value: u32,
+}

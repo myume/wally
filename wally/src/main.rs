@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use reqwest::Url;
 use std::{
-    fs,
+    fs::{self, remove_file},
     path::{Path, PathBuf},
     process::{Command, ExitCode},
 };
@@ -25,7 +25,7 @@ struct Cli {
     save: bool,
 
     /// The location of the config file
-    #[arg(long, default_value = "./wally.kdl")]
+    #[arg(short, long, default_value = "./wally.kdl")]
     config: PathBuf,
 
     /// The path to save wallpapers to
@@ -40,6 +40,11 @@ struct Cli {
     /// setting a wallpaper will save it as well.
     #[arg(long)]
     set_wallpaper: bool,
+
+    /// Delete the oldest wallpapers if saving a new wallpaper to the output dir would result in more
+    /// files than the max_downloaded specified in the config
+    #[arg(long)]
+    evict_oldest: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Subcommand)]
@@ -99,12 +104,13 @@ async fn main() -> ExitCode {
         },
     };
 
+    let output_dir = args.output_path.unwrap_or(config.general.output_dir.value);
     if args.save || args.set_wallpaper {
-        let output_dir = args.output_path.unwrap_or(config.general.output_dir.value);
         if !output_dir.exists() {
             eprintln!("wallpaper output dir does not exist, creating dir...");
             if let Err(e) = fs::create_dir(&output_dir) {
                 eprintln!("Failed to create output dir: {e}");
+                return ExitCode::FAILURE;
             }
         }
 
@@ -113,14 +119,45 @@ async fn main() -> ExitCode {
         if args.set_wallpaper {
             let selected_image = &image_paths[rand::random_range(..image_paths.len())];
             if let Err(e) = set_wallpaper(&config.general.set_command.command, selected_image) {
-                println!("Failed to set wallpaper: {e}");
+                eprintln!("Failed to set wallpaper: {e}");
+                return ExitCode::FAILURE;
             }
         }
     } else {
         wallpaper_urls.iter().for_each(|url| println!("{url}"));
     }
 
+    if args.evict_oldest
+        && let Err(e) = evict_oldest(&output_dir, config.general.max_downloaded.value as usize)
+    {
+        eprintln!("Failed to evict extra wallpapers: {e}");
+        return ExitCode::FAILURE;
+    }
+
     ExitCode::SUCCESS
+}
+
+fn evict_oldest(output_dir: &Path, max_downloaded: usize) -> anyhow::Result<()> {
+    let mut wallpaper_files = Vec::new();
+    for entry in output_dir.read_dir().context("failed to read output dir")? {
+        if let Ok(entry) = entry
+            && let Ok(metadata) = entry.metadata()
+        {
+            wallpaper_files.push((entry.path(), metadata.modified()?));
+        }
+    }
+
+    if wallpaper_files.len() > max_downloaded {
+        eprintln!("Evicting extra files");
+        wallpaper_files.sort_by(|a, b| a.1.cmp(&b.1));
+        let files_to_evict = &wallpaper_files[..wallpaper_files.len() - max_downloaded];
+        for (path, _) in files_to_evict {
+            eprintln!("removing file {}", path.display());
+            remove_file(path).context("failed to remove file")?;
+        }
+    }
+
+    Ok(())
 }
 
 async fn download_wallpapers(
