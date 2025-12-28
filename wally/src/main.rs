@@ -36,7 +36,8 @@ struct Cli {
     #[arg(short, long)]
     source: Option<WallpaperSource>,
 
-    /// Set the wallpaper. If there are multiple wallpapers, randomly choose one.
+    /// Set the wallpaper. If there are multiple wallpapers, randomly choose one. By default,
+    /// setting a wallpaper will save it as well.
     #[arg(long)]
     set_wallpaper: bool,
 }
@@ -98,18 +99,16 @@ async fn main() -> ExitCode {
         },
     };
 
-    let output_dir = args.output_path.unwrap_or(config.general.output_dir.value);
-    if args.save {
+    if args.save || args.set_wallpaper {
+        let output_dir = args.output_path.unwrap_or(config.general.output_dir.value);
         if !output_dir.exists() {
             eprintln!("wallpaper output dir does not exist, creating dir...");
             if let Err(e) = fs::create_dir(&output_dir) {
                 eprintln!("Failed to create output dir: {e}");
             }
         }
-        eprintln!("saving wallpapers to {}", output_dir.display());
-    }
 
-    if args.save {
+        eprintln!("saving wallpapers to {}", output_dir.display());
         let image_paths = download_wallpapers(wallpaper_urls, provider, &output_dir).await;
         if args.set_wallpaper {
             let selected_image = &image_paths[rand::random_range(..image_paths.len())];
