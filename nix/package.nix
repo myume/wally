@@ -20,7 +20,7 @@ rustPlatform.buildRustPackage {
   ];
 
   meta = {
-    description = "A wallpaper downloader";
+    description = "A wallpaper scraper and downloader";
     homepage = "https://codeberg.org/yum/wally";
     license = lib.licenses.mit;
     maintainers = with lib.maintainers; [yum];

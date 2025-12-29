@@ -11,7 +11,7 @@ use wally_providers::providers::{
     WallpaperProvider, konachan::Konachan, pixiv::Pixiv, wallhaven::Wallhaven,
 };
 
-/// Wally the wallpaper picker
+/// Wally the wallpaper scraper
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Cli {

@@ -11,7 +11,7 @@ self: {
   cfg = config.services.wally;
 in {
   options.services.wally = {
-    enable = mkEnableOption "Wally, wallpaper downloader";
+    enable = mkEnableOption "Wally, wallpaper scraper and randomizer";
 
     package = mkOption {
       description = "The Wally package";

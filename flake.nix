@@ -1,5 +1,5 @@
 {
-  description = "Wally - wallpaper downloader";
+  description = "Wally - wallpaper scraper";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-unstable";
 
