@@ -1,5 +1,5 @@
 {
-  description = "Wally - wallpaper picker";
+  description = "Wally - wallpaper downloader";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-unstable";
 
@@ -23,5 +23,10 @@
     devShells = forAllSystems (pkgs: {
       default = pkgs.callPackage ./nix/shell.nix {};
     });
+
+    homeManagerModules = {
+      default = self.homeManagerModules.wally;
+      wally = import ./nix/hm-module.nix self;
+    };
   };
 }
