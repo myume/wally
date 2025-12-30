@@ -5,11 +5,37 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+use tokio::time::{Duration, sleep};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use wally_providers::providers::{
     WallpaperProvider, konachan::Konachan, pixiv::Pixiv, wallhaven::Wallhaven,
 };
+
+macro_rules! retry {
+    ($logic:expr, $num_retries:expr) => {{
+        let mut retries = $num_retries;
+        let mut backoff = 300;
+        loop {
+            match $logic.await {
+                Ok(val) => break Ok(val),
+                Err(e) => {
+                    retries -= 1;
+                    if retries <= 0 {
+                        break Err(anyhow::anyhow!(
+                            "Operation failed after {} attempts: {}",
+                            $num_retries,
+                            e
+                        ));
+                    }
+                    eprintln!("Error: {}. Retrying... ({} left)", e, retries);
+                    sleep(Duration::from_millis(backoff)).await;
+                    backoff *= 2;
+                }
+            }
+        }
+    }};
+}
 
 /// Wally the wallpaper scraper
 #[derive(Parser, Debug)]
@@ -85,8 +111,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let wallpaper_urls = match args.mode {
-        Mode::Random => vec![provider.random().await?],
-        Mode::List { limit } => provider.list(limit).await?,
+        Mode::Random => vec![retry!(provider.random(), 3)?],
+        Mode::List { limit } => retry!(provider.list(limit), 3)?,
     };
 
     let output_dir = args.output_path.unwrap_or(config.general.output_dir.value);
@@ -149,7 +175,7 @@ async fn download_wallpapers(
     let mut downloaded_images = Vec::new();
     for url in wallpaper_urls {
         eprintln!("downloading wallpaper from {url}");
-        match provider.download(&url, output_dir).await {
+        match retry!(provider.download(&url, output_dir), 3) {
             Ok(path) => downloaded_images.push(path),
             Err(e) => eprintln!("Failed to download wallpaper from {url}: {e}"),
         }
