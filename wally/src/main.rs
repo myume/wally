@@ -13,9 +13,9 @@ use wally_providers::providers::{
 };
 
 macro_rules! retry {
-    ($logic:expr, $num_retries:expr) => {{
+    ($logic:expr, $num_retries:expr, $backoff:expr) => {{
         let mut retries = $num_retries;
-        let mut backoff = 300;
+        let mut backoff = $backoff;
         loop {
             match $logic.await {
                 Ok(val) => break Ok(val),
@@ -111,8 +111,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let wallpaper_urls = match args.mode {
-        Mode::Random => vec![retry!(provider.random(), 3)?],
-        Mode::List { limit } => retry!(provider.list(limit), 3)?,
+        Mode::Random => vec![retry!(provider.random(), 5, 1000)?],
+        Mode::List { limit } => retry!(provider.list(limit), 5, 1000)?,
     };
 
     let output_dir = args.output_path.unwrap_or(config.general.output_dir.value);
@@ -175,7 +175,7 @@ async fn download_wallpapers(
     let mut downloaded_images = Vec::new();
     for url in wallpaper_urls {
         eprintln!("downloading wallpaper from {url}");
-        match retry!(provider.download(&url, output_dir), 3) {
+        match retry!(provider.download(&url, output_dir), 5, 1000) {
             Ok(path) => downloaded_images.push(path),
             Err(e) => eprintln!("Failed to download wallpaper from {url}: {e}"),
         }
