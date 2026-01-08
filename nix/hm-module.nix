@@ -49,7 +49,7 @@ in {
       Service = {
         Type = "oneshot";
         ExecStart = "${cfg.package}/bin/wally --config ${cfg.config} --source konachan --evict-oldest --set-wallpaper random";
-        RemainAfterExit = true;
+        RemainAfterExit = false;
       };
     };
   };
