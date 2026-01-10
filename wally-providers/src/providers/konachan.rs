@@ -64,7 +64,7 @@ impl WallpaperProvider for Konachan {
     }
 
     async fn random(&self) -> anyhow::Result<Url> {
-        let wallpapers = self.fetch_list(100).await?;
+        let wallpapers = self.fetch_list(500).await?;
         Ok(wallpapers[rand::random_range(..wallpapers.len())]
             .file_url
             .clone())
