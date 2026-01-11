@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use async_trait::async_trait;
 use regex::Regex;
-use reqwest::{Url, header::REFERER};
+use reqwest::{Client, Url, header::REFERER};
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
@@ -98,14 +98,12 @@ impl WallpaperProvider for Pixiv {
             .replace(source.as_str(), "img-original")
             .replace("_master1200", "");
 
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(REFERER, PIXIV_BASE_URL.parse()?);
-
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .build()?;
-
-        let response = client.get(&url).send().await?.error_for_status()?;
+        let response = Client::new()
+            .get(&url)
+            .header(REFERER, PIXIV_BASE_URL)
+            .send()
+            .await?
+            .error_for_status()?;
 
         let image_bytes = response.bytes().await?;
         let filename = url
