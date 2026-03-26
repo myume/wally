@@ -51,7 +51,7 @@ struct Cli {
     save: bool,
 
     /// The location of the config file
-    #[arg(short, long, default_value = "./wally.kdl")]
+    #[arg(short, long)]
     config: PathBuf,
 
     /// The path to save wallpapers to
