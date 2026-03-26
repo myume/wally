@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use regex::Regex;
 use reqwest::{Client, Url, header::REFERER};
 use serde::{Deserialize, Serialize};
-use tokio::task::JoinHandle;
+use tokio::task::JoinSet;
 
 use crate::{providers::WallpaperProvider, util::save_wallpaper};
 
@@ -38,24 +38,22 @@ impl Pixiv {
         limit: u32,
         query_string: &str,
     ) -> anyhow::Result<Vec<PixivContent>> {
-        let mut handles = Vec::new();
+        let mut handles = JoinSet::new();
 
         for page in 1..=limit.div_ceil(ITEMS_PER_PAGE) {
             let query_string = query_string.to_owned();
-            let handle: JoinHandle<anyhow::Result<PixivResponse>> = tokio::spawn(async move {
+            handles.spawn(async move {
                 reqwest::get(format!("{PIXIV_BASE_URL}?{query_string}&p={page}"))
                     .await?
-                    .json()
+                    .json::<PixivResponse>()
                     .await
                     .context("Unable to parse pixiv response into json")
             });
-            handles.push(handle);
         }
 
         let mut wallpaper_list = Vec::new();
-        for handle in handles {
-            let response = handle.await.context("Failed to fire request")??;
-            wallpaper_list.extend(response.contents)
+        for handle in handles.join_all().await {
+            wallpaper_list.extend(handle?.contents);
         }
 
         Ok(wallpaper_list.into_iter().take(limit as usize).collect())
