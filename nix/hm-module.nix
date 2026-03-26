@@ -7,6 +7,7 @@ self: {
   inherit (lib.modules) mkIf;
   inherit (lib.types) package str ints path bool enum nullOr;
   inherit (lib.options) mkOption mkEnableOption;
+  inherit (lib.trivial) boolToString;
 
   cfg = config.services.wally;
   configPath = "wally/wally.kdl";
@@ -14,36 +15,29 @@ self: {
   wallhavenConfig = lib.types.submodule {
     options = {
       categories = {
-        general = mkOption {
-          description = "Whether to enable general wallpapers";
-          type = bool;
-          default = true;
-          apply = lib.trivial.boolToString;
-        };
-        anime = mkOption {
-          description = "Whether to enable anime wallpapers";
-          type = bool;
-          default = true;
-          apply = lib.trivial.boolToString;
-        };
-        people = mkOption {
-          description = "Whether to enable people wallpapers";
-          type = bool;
-          default = true;
-          apply = lib.trivial.boolToString;
-        };
+        general =
+          mkEnableOption "general wallpapers"
+          // {
+            default = true;
+          };
+        anime =
+          mkEnableOption "anime wallpapers"
+          // {
+            default = true;
+          };
+        people =
+          mkEnableOption "people wallpapers"
+          // {
+            default = true;
+          };
       };
     };
   };
 
   konachanConfig = lib.types.submodule {
     options = {
-      explicit = mkOption {
-        description = "Whether to enable explicit wallpapers";
-        type = bool;
-        default = false;
-        apply = lib.trivial.boolToString;
-      };
+      explicit =
+        mkEnableOption "explicit wallpapers";
     };
   };
 
@@ -59,7 +53,6 @@ self: {
         description = "Maximum number of wallpapers to keep in the output dir";
         type = ints.positive;
         default = 10;
-        apply = toString;
       };
 
       setCommand = mkOption {
@@ -122,20 +115,12 @@ in {
       '';
       type = nullOr (enum wallpaperSources);
       default = null;
-      apply = source:
-        if source != null
-        then "--source ${source}"
-        else "";
     };
 
     evictOldest = mkOption {
       description = "Whether to evict the oldest entries from the output dir when the max number of files is reached";
       type = bool;
       default = true;
-      apply = evict:
-        if evict
-        then "--evict-oldest"
-        else "";
     };
   };
 
@@ -147,19 +132,19 @@ in {
         general {
             output_dir "${cfg.settings.outputDir}"
             set_command "${cfg.settings.setCommand}"
-            max_downloaded ${cfg.settings.maxDownloaded}
+            max_downloaded ${toString cfg.settings.maxDownloaded}
         }
 
         wallhaven {
             categories {
-                general #${cfg.settings.wallhaven.categories.general}
-                anime #${cfg.settings.wallhaven.categories.anime}
-                people #${cfg.settings.wallhaven.categories.people}
+                general #${boolToString cfg.settings.wallhaven.categories.general}
+                anime #${boolToString cfg.settings.wallhaven.categories.anime}
+                people #${boolToString cfg.settings.wallhaven.categories.people}
             }
         }
 
         konachan {
-            explicit #${cfg.settings.konachan.explicit}
+            explicit #${boolToString cfg.settings.konachan.explicit}
         }
       '';
     };
@@ -178,7 +163,20 @@ in {
     systemd.user.services.wally = {
       Service = {
         Type = "oneshot";
-        ExecStart = "${cfg.package}/bin/wally --config ${config.xdg.configHome}/${configPath} ${cfg.defaultSource} ${cfg.evictOldest} --set-wallpaper random";
+        ExecStart = let
+          additionalFlags = builtins.filter (flag: flag != "") [
+            (
+              if cfg.defaultSource != null
+              then "--source ${cfg.defaultSource}"
+              else ""
+            )
+            (
+              if cfg.evictOldest
+              then "--evict-oldest"
+              else ""
+            )
+          ];
+        in "${cfg.package}/bin/wally --config ${config.xdg.configHome}/${configPath} ${lib.concatStringsSep " " additionalFlags} --set-wallpaper random";
         RemainAfterExit = false;
       };
     };
