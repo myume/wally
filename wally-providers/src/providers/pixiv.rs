@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use regex::Regex;
 use reqwest::{Client, Url, header::REFERER};
 use serde::{Deserialize, Serialize};
-use tokio::task::JoinSet;
+use tokio::{join, task::JoinSet};
 
 use crate::{providers::WallpaperProvider, util::save_wallpaper};
 
@@ -101,13 +101,20 @@ impl WallpaperProvider for Pixiv {
             .replace(source.as_str(), "img-original")
             .replace("_master1200", "");
 
-        let response = Client::new()
-            .get(&url)
-            .header(REFERER, PIXIV_BASE_URL)
-            .send()
-            .await?
-            .error_for_status()?;
+        let client = Client::new();
 
+        let (jpg, png) = join!(
+            client.get(&url).header(REFERER, PIXIV_BASE_URL).send(),
+            client
+                .get(&url)
+                .header(REFERER, PIXIV_BASE_URL.replace(".jpg", ".png"))
+                .send()
+        );
+
+        let response = jpg?
+            .error_for_status()
+            .or(png?.error_for_status())
+            .context("Failed to fetch image")?;
         let image_bytes = response.bytes().await?;
         let filename = url
             .split("/")
