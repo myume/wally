@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use reqwest::Url;
 use std::{
-    fs::{self, remove_file},
+    fs::remove_file,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -97,12 +97,20 @@ async fn main() -> anyhow::Result<()> {
         Err(e) => return Err(anyhow!("{:?}", e.wrap_err("Failed to read config"))),
     };
 
+    let output_dir = args.output_path.unwrap_or(config.general.output_dir.value);
+    if !output_dir.exists() {
+        return Err(anyhow!(
+            "Wallpaper output dir {} does not exist",
+            output_dir.display()
+        ));
+    }
+
     let all_sources = WallpaperSource::value_variants();
     let source = args
         .source
         .unwrap_or(all_sources[rand::random_range(..all_sources.len())]);
 
-    eprintln!("pulling wallpapers from {:?}", source);
+    eprintln!("Pulling wallpapers from {:?}", source);
 
     let provider: Box<dyn WallpaperProvider> = match source {
         WallpaperSource::Wallhaven => Box::new(Wallhaven::new(config.wallhaven)),
@@ -115,14 +123,8 @@ async fn main() -> anyhow::Result<()> {
         Mode::List { limit } => retry!(provider.list(limit), 5, 1000)?,
     };
 
-    let output_dir = args.output_path.unwrap_or(config.general.output_dir.value);
     if args.save || args.set_wallpaper {
-        if !output_dir.exists() {
-            eprintln!("wallpaper output dir does not exist, creating dir...");
-            fs::create_dir(&output_dir).context("Failed to create output dir")?;
-        }
-
-        eprintln!("saving wallpapers to {}", output_dir.display());
+        eprintln!("Saving wallpapers to {}", output_dir.display());
         let image_paths = download_wallpapers(wallpaper_urls, provider, &output_dir).await;
         if args.set_wallpaper {
             let selected_image = &image_paths[rand::random_range(..image_paths.len())];
@@ -174,7 +176,7 @@ async fn download_wallpapers(
 ) -> Vec<PathBuf> {
     let mut downloaded_images = Vec::new();
     for url in wallpaper_urls {
-        eprintln!("downloading wallpaper from {url}");
+        eprintln!("Downloading wallpaper from {url}");
         match retry!(provider.download(&url, output_dir), 5, 1000) {
             Ok(path) => downloaded_images.push(path),
             Err(e) => eprintln!("Failed to download wallpaper from {url}: {e}"),
