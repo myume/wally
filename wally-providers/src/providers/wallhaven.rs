@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use async_trait::async_trait;
-use reqwest::Url;
+use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
-use tokio::task::JoinHandle;
+use tokio::task::JoinSet;
 use wally_config::wallhaven::WallhavenConfig;
 
 use crate::{providers::WallpaperProvider, util::download_wallpaper};
@@ -72,26 +72,28 @@ impl Wallhaven {
     }
 
     async fn fetch_list(&self, limit: usize) -> anyhow::Result<Vec<WallhavenData>> {
-        let mut handles = Vec::new();
+        let mut handles = JoinSet::new();
 
+        let client = Client::new();
         for page in 1..=limit.div_ceil(ITEMS_PER_PAGE) {
             let category = self.category_bits();
-            let handle: JoinHandle<anyhow::Result<WallhavenResponse>> = tokio::spawn(async move {
-                reqwest::get(format!(
-                    "{WALLHAVEN_API_URL}?page={page}&categories={category}"
-                ))
-                .await?
-                .json()
-                .await
-                .context("Unable to parse wallhaven response into json")
+            let client = client.clone();
+            handles.spawn(async move {
+                client
+                    .get(format!(
+                        "{WALLHAVEN_API_URL}?page={page}&categories={category}"
+                    ))
+                    .send()
+                    .await?
+                    .json::<WallhavenResponse>()
+                    .await
+                    .context("Unable to parse wallhaven response into json")
             });
-            handles.push(handle);
         }
 
         let mut wallpapers = Vec::new();
-        for handle in handles {
-            let response = handle.await.context("Failed to fire request")??;
-            wallpapers.extend(response.data)
+        for handle in handles.join_all().await {
+            wallpapers.extend(handle?.data)
         }
 
         wallpapers.truncate(limit);

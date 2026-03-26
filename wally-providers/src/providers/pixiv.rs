@@ -40,10 +40,14 @@ impl Pixiv {
     ) -> anyhow::Result<Vec<PixivContent>> {
         let mut handles = JoinSet::new();
 
+        let client = Client::new();
         for page in 1..=limit.div_ceil(ITEMS_PER_PAGE) {
             let query_string = query_string.to_owned();
+            let client = client.clone();
             handles.spawn(async move {
-                reqwest::get(format!("{PIXIV_BASE_URL}?{query_string}&p={page}"))
+                client
+                    .get(format!("{PIXIV_BASE_URL}?{query_string}&p={page}"))
+                    .send()
                     .await?
                     .json::<PixivResponse>()
                     .await

@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use reqwest::Url;
+use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinSet;
 use wally_config::konachan::KonachanConfig;
@@ -41,11 +41,15 @@ impl Konachan {
             base_url.query_pairs_mut().append_pair("tags", "rating:s");
         }
 
+        let client = Client::new();
         for page in 1..=limit.div_ceil(limit.min(MAX_PAGE_LIMIT)) {
             let mut url = base_url.clone();
             url.query_pairs_mut().append_pair("page", &page.to_string());
+            let client = client.clone();
             handles.spawn(async move {
-                reqwest::get(url)
+                client
+                    .get(url)
+                    .send()
                     .await?
                     .error_for_status()?
                     .json::<Vec<KonachanItem>>()
