@@ -127,6 +127,16 @@ in {
         then "--source ${source}"
         else "";
     };
+
+    evictOldest = mkOption {
+      description = "Whether to evict the oldest entries from the output dir when the max number of files is reached";
+      type = bool;
+      default = true;
+      apply = evict:
+        if evict
+        then "--evict-oldest"
+        else "";
+    };
   };
 
   config = mkIf cfg.enable {
@@ -168,7 +178,7 @@ in {
     systemd.user.services.wally = {
       Service = {
         Type = "oneshot";
-        ExecStart = "${cfg.package}/bin/wally --config ${config.xdg.configHome}/${configPath} ${cfg.defaultSource} --evict-oldest --set-wallpaper random";
+        ExecStart = "${cfg.package}/bin/wally --config ${config.xdg.configHome}/${configPath} ${cfg.defaultSource} ${cfg.evictOldest} --set-wallpaper random";
         RemainAfterExit = false;
       };
     };
