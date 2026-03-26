@@ -5,7 +5,7 @@ self: {
   ...
 }: let
   inherit (lib.modules) mkIf;
-  inherit (lib.types) package str ints path bool;
+  inherit (lib.types) package str ints path bool enum nullOr;
   inherit (lib.options) mkOption mkEnableOption;
 
   cfg = config.services.wally;
@@ -85,6 +85,12 @@ self: {
       };
     };
   };
+
+  wallpaperSources = [
+    "wallhaven"
+    "pixiv"
+    "konachan"
+  ];
 in {
   options.services.wally = {
     enable = mkEnableOption "Wally, wallpaper scraper and randomizer";
@@ -105,6 +111,21 @@ in {
       description = "The wally configuration";
       type = configType;
       default = {};
+    };
+
+    defaultSource = mkOption {
+      description = ''
+        The default source to pull wallpapers from.
+
+        Possible sources:
+        ${builtins.concatStringsSep "\n" wallpaperSources}
+      '';
+      type = nullOr (enum wallpaperSources);
+      default = null;
+      apply = source:
+        if source != null
+        then "--source ${source}"
+        else "";
     };
   };
 
@@ -147,7 +168,7 @@ in {
     systemd.user.services.wally = {
       Service = {
         Type = "oneshot";
-        ExecStart = "${cfg.package}/bin/wally --config ${config.xdg.configHome}/${configPath} --source konachan --evict-oldest --set-wallpaper random";
+        ExecStart = "${cfg.package}/bin/wally --config ${config.xdg.configHome}/${configPath} ${cfg.defaultSource} --evict-oldest --set-wallpaper random";
         RemainAfterExit = false;
       };
     };
