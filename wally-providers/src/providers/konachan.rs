@@ -37,6 +37,7 @@ impl Konachan {
                 limit.min(100)
             ))
             .await?
+            .error_for_status()?
             .json()
             .await?;
 
