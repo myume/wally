@@ -10,7 +10,7 @@ use wally_config::wallhaven::WallhavenConfig;
 use crate::{providers::WallpaperProvider, util::download_wallpaper};
 
 const WALLHAVEN_API_URL: &str = "https://wallhaven.cc/api/v1/search";
-const ITEMS_PER_PAGE: u32 = 24;
+const ITEMS_PER_PAGE: usize = 24;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct WallhavenData {
@@ -71,7 +71,7 @@ impl Wallhaven {
         bits
     }
 
-    async fn fetch_list(&self, limit: u32) -> anyhow::Result<Vec<WallhavenData>> {
+    async fn fetch_list(&self, limit: usize) -> anyhow::Result<Vec<WallhavenData>> {
         let mut handles = Vec::new();
 
         for page in 1..=limit.div_ceil(ITEMS_PER_PAGE) {
@@ -88,19 +88,20 @@ impl Wallhaven {
             handles.push(handle);
         }
 
-        let mut wallpaper_list = Vec::new();
+        let mut wallpapers = Vec::new();
         for handle in handles {
             let response = handle.await.context("Failed to fire request")??;
-            wallpaper_list.extend(response.data)
+            wallpapers.extend(response.data)
         }
 
-        Ok(wallpaper_list.into_iter().take(limit as usize).collect())
+        wallpapers.truncate(limit);
+        Ok(wallpapers)
     }
 }
 
 #[async_trait]
 impl WallpaperProvider for Wallhaven {
-    async fn list(&self, limit: u32) -> anyhow::Result<Vec<Url>> {
+    async fn list(&self, limit: usize) -> anyhow::Result<Vec<Url>> {
         Ok(self
             .fetch_list(limit)
             .await?

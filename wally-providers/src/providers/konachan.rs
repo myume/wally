@@ -9,7 +9,7 @@ use wally_config::konachan::KonachanConfig;
 use crate::{providers::WallpaperProvider, util::download_wallpaper};
 
 const KONACHAN_BASE_URL: &str = "https://konachan.net";
-const MAX_PAGE_LIMIT: u32 = 100;
+const MAX_PAGE_LIMIT: usize = 100;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct KonachanItem {
@@ -30,7 +30,7 @@ impl Konachan {
         Self { config }
     }
 
-    async fn fetch_list(&self, limit: u32) -> anyhow::Result<Vec<KonachanItem>> {
+    async fn fetch_list(&self, limit: usize) -> anyhow::Result<Vec<KonachanItem>> {
         let mut handles = JoinSet::new();
 
         let mut base_url = Url::parse(&format!(
@@ -57,13 +57,15 @@ impl Konachan {
         for handle in handles.join_all().await {
             wallpapers.extend(handle?);
         }
+
+        wallpapers.truncate(limit);
         Ok(wallpapers)
     }
 }
 
 #[async_trait]
 impl WallpaperProvider for Konachan {
-    async fn list(&self, limit: u32) -> anyhow::Result<Vec<Url>> {
+    async fn list(&self, limit: usize) -> anyhow::Result<Vec<Url>> {
         Ok(self
             .fetch_list(limit)
             .await?

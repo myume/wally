@@ -78,7 +78,7 @@ enum Mode {
     Random,
     List {
         #[arg(long, default_value_t = 10)]
-        limit: u32,
+        limit: usize,
     },
 }
 

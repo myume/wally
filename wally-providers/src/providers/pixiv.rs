@@ -10,7 +10,7 @@ use tokio::task::JoinSet;
 use crate::{providers::WallpaperProvider, util::save_wallpaper};
 
 const PIXIV_BASE_URL: &str = "https://www.pixiv.net/ranking.php";
-const ITEMS_PER_PAGE: u32 = 50;
+const ITEMS_PER_PAGE: usize = 50;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PixivResponse {
@@ -35,7 +35,7 @@ impl Pixiv {
 
     async fn fetch_list(
         &self,
-        limit: u32,
+        limit: usize,
         query_string: &str,
     ) -> anyhow::Result<Vec<PixivContent>> {
         let mut handles = JoinSet::new();
@@ -51,12 +51,13 @@ impl Pixiv {
             });
         }
 
-        let mut wallpaper_list = Vec::new();
+        let mut wallpapers = Vec::new();
         for handle in handles.join_all().await {
-            wallpaper_list.extend(handle?.contents);
+            wallpapers.extend(handle?.contents);
         }
 
-        Ok(wallpaper_list.into_iter().take(limit as usize).collect())
+        wallpapers.truncate(limit);
+        Ok(wallpapers)
     }
 }
 
@@ -68,7 +69,7 @@ impl Default for Pixiv {
 
 #[async_trait]
 impl WallpaperProvider for Pixiv {
-    async fn list(&self, limit: u32) -> anyhow::Result<Vec<reqwest::Url>> {
+    async fn list(&self, limit: usize) -> anyhow::Result<Vec<reqwest::Url>> {
         let wallpaper_list = self
             .fetch_list(limit, "mode=monthly&content=illust&format=json")
             .await?;
