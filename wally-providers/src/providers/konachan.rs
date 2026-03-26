@@ -3,11 +3,13 @@ use std::path::{Path, PathBuf};
 use async_trait::async_trait;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
+use tokio::task::JoinSet;
 use wally_config::konachan::KonachanConfig;
 
 use crate::{providers::WallpaperProvider, util::download_wallpaper};
 
 const KONACHAN_BASE_URL: &str = "https://konachan.net";
+const MAX_PAGE_LIMIT: u32 = 100;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct KonachanItem {
@@ -29,27 +31,33 @@ impl Konachan {
     }
 
     async fn fetch_list(&self, limit: u32) -> anyhow::Result<Vec<KonachanItem>> {
-        let mut wallpapers = Vec::new();
-        let mut page = 1;
-        while wallpapers.len() < limit as usize {
-            let mut response: Vec<KonachanItem> = reqwest::get(format!(
-                "{KONACHAN_BASE_URL}/post.json?limit={}&page={page}",
-                limit.min(100)
-            ))
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
+        let mut handles = JoinSet::new();
 
-            if !self.config.explicit.value {
-                response.retain(|item| item.rating == "s");
-            }
-
-            wallpapers.extend(response);
-            page += 1;
+        let mut base_url = Url::parse(&format!(
+            "{KONACHAN_BASE_URL}/post.json?limit={}",
+            limit.min(MAX_PAGE_LIMIT)
+        ))?;
+        if !self.config.explicit.value {
+            base_url.query_pairs_mut().append_pair("tags", "rating:s");
         }
 
-        Ok(wallpapers.into_iter().take(limit as usize).collect())
+        for page in 1..=limit.div_ceil(limit.min(MAX_PAGE_LIMIT)) {
+            let mut url = base_url.clone();
+            url.query_pairs_mut().append_pair("page", &page.to_string());
+            handles.spawn(async move {
+                reqwest::get(url)
+                    .await?
+                    .error_for_status()?
+                    .json::<Vec<KonachanItem>>()
+                    .await
+            });
+        }
+
+        let mut wallpapers = Vec::new();
+        for handle in handles.join_all().await {
+            wallpapers.extend(handle?);
+        }
+        Ok(wallpapers)
     }
 }
 
