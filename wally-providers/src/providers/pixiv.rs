@@ -83,7 +83,7 @@ impl WallpaperProvider for Pixiv {
 
     async fn random(&self) -> anyhow::Result<reqwest::Url> {
         let wallpaper_list = self
-            .fetch_list(50, "mode=daily&content=illust&format=json")
+            .fetch_list(50, "mode=monthly&content=illust&format=json")
             .await?;
 
         let selected = rand::random_range(0..wallpaper_list.len());
