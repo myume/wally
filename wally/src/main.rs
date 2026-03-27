@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use tokio::time::{Duration, sleep};
+use tokio::time::{Duration, sleep, timeout};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use wally_providers::providers::{
@@ -17,9 +17,12 @@ macro_rules! retry {
         let mut retries = $num_retries;
         let mut backoff = $backoff;
         loop {
-            match $logic.await {
-                Ok(val) => break Ok(val),
-                Err(e) => {
+            match timeout(Duration::from_secs(10), $logic)
+                .await
+                .context("operation timed out")
+            {
+                Ok(Ok(val)) => break Ok(val),
+                Ok(Err(e)) | Err(e) => {
                     retries -= 1;
                     if retries <= 0 {
                         break Err(anyhow::anyhow!(
