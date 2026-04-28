@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use reqwest::Url;
 use std::{
-    fs::remove_file,
+    fs::{copy, create_dir, remove_file},
     path::{Path, PathBuf},
     process::Command,
 };
@@ -11,6 +11,10 @@ use clap::{Parser, Subcommand, ValueEnum};
 use wally_providers::providers::{
     WallpaperProvider, konachan::Konachan, pixiv::Pixiv, wallhaven::Wallhaven,
 };
+
+use crate::meta::Metadata;
+
+mod meta;
 
 macro_rules! retry {
     ($logic:expr, $num_retries:expr, $backoff:expr) => {{
@@ -55,7 +59,7 @@ struct Cli {
 
     /// The location of the config file
     #[arg(short, long)]
-    config: PathBuf,
+    config: Option<PathBuf>,
 
     /// The path to save wallpapers to
     #[arg(short, long)]
@@ -78,11 +82,15 @@ struct Cli {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Subcommand)]
 enum Mode {
+    /// Retrieve a random wallpaper from the source
     Random,
+    /// Retrieve a list of wallpapers from the source
     List {
         #[arg(long, default_value_t = 10)]
         limit: usize,
     },
+    /// Archive the currently active wallpaper
+    Archive,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -95,7 +103,10 @@ pub enum WallpaperSource {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
-    let config = match wally_config::read_config(&args.config) {
+
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let default_config_path = PathBuf::from(home).join(".config/wally/wally.kdl");
+    let config = match wally_config::read_config(&args.config.unwrap_or(default_config_path)) {
         Ok(config) => config,
         Err(e) => return Err(anyhow!("{:?}", e.wrap_err("Failed to read config"))),
     };
@@ -108,22 +119,26 @@ async fn main() -> anyhow::Result<()> {
         ));
     }
 
+    if args.mode == Mode::Archive {
+        return archive_selected_wallpaper(&output_dir);
+    }
+
     let all_sources = WallpaperSource::value_variants();
     let source = args
         .source
         .unwrap_or(all_sources[rand::random_range(..all_sources.len())]);
-
-    eprintln!("Pulling wallpapers from {:?}", source);
 
     let provider: Box<dyn WallpaperProvider> = match source {
         WallpaperSource::Wallhaven => Box::new(Wallhaven::new(config.wallhaven)),
         WallpaperSource::Pixiv => Box::new(Pixiv::new()),
         WallpaperSource::Konachan => Box::new(Konachan::new(config.konachan)),
     };
+    eprintln!("Pulling wallpapers from {:?}", source);
 
     let wallpaper_urls = match args.mode {
         Mode::Random => vec![retry!(provider.random(), 5, 1000)?],
         Mode::List { limit } => retry!(provider.list(limit), 5, 1000)?,
+        Mode::Archive => unreachable!("should be handled already"),
     };
 
     if args.save || args.set_wallpaper {
@@ -131,8 +146,12 @@ async fn main() -> anyhow::Result<()> {
         let image_paths = download_wallpapers(wallpaper_urls, provider, &output_dir).await;
         if args.set_wallpaper {
             let selected_image = &image_paths[rand::random_range(..image_paths.len())];
-            set_wallpaper(&config.general.set_command.command, selected_image)
-                .context("Failed to set wallpaper")?
+            set_wallpaper(
+                &config.general.set_command.command,
+                &output_dir,
+                selected_image,
+            )
+            .context("Failed to set wallpaper")?
         }
     } else {
         wallpaper_urls.iter().for_each(|url| println!("{url}"));
@@ -151,12 +170,19 @@ fn evict_oldest(output_dir: &Path, max_downloaded: usize) -> anyhow::Result<()> 
     for entry in output_dir.read_dir().context("failed to read output dir")? {
         let entry = entry.context("failed to read wallpaper file")?;
         let metadata = entry.metadata().context("could not read file metadata")?;
-        wallpaper_files.push((
-            entry.path(),
-            metadata
-                .modified()
-                .context("could not read wallpaper modified time")?,
-        ));
+
+        if entry
+            .file_type()
+            .context("could not read file type")?
+            .is_file()
+        {
+            wallpaper_files.push((
+                entry.path(),
+                metadata
+                    .modified()
+                    .context("could not read wallpaper modified time")?,
+            ));
+        }
     }
 
     if wallpaper_files.len() > max_downloaded {
@@ -188,7 +214,12 @@ async fn download_wallpapers(
     downloaded_images
 }
 
-fn set_wallpaper(command: &str, img_path: &Path) -> anyhow::Result<()> {
+fn set_wallpaper(command: &str, output_dir: &Path, img_path: &Path) -> anyhow::Result<()> {
+    eprintln!("Saving metadata...");
+    let mut metadata = Metadata::read(output_dir)?;
+    metadata.active_wallpaper = img_path.to_path_buf();
+    metadata.save(output_dir)?;
+
     let command = command.replace(
         "{{path}}",
         img_path.to_str().expect("path should be valid string"),
@@ -204,5 +235,29 @@ fn set_wallpaper(command: &str, img_path: &Path) -> anyhow::Result<()> {
         .args(&parts[1..])
         .output()
         .context("Failed to set wallpaper")?;
+    Ok(())
+}
+
+fn archive_selected_wallpaper(output_dir: &Path) -> anyhow::Result<()> {
+    let metadata = Metadata::read(output_dir)?;
+    eprintln!(
+        "Archiving wallpaper: {}...",
+        metadata.active_wallpaper.display()
+    );
+
+    let archive_dir = output_dir.join("archived");
+    let filename = metadata
+        .active_wallpaper
+        .file_name()
+        .context("failed to get file name")?;
+
+    if !archive_dir.exists() {
+        create_dir(&archive_dir)?;
+    }
+
+    let archived_file = archive_dir.join(filename);
+    copy(&metadata.active_wallpaper, &archived_file)?;
+
+    eprintln!("Wallpaper archived at: {}", archived_file.display());
     Ok(())
 }

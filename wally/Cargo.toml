@@ -11,3 +11,5 @@ rand.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
 reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

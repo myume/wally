@@ -1838,6 +1838,8 @@ dependencies = [
  "clap",
  "rand",
  "reqwest",
+ "serde",
+ "serde_json",
  "tokio",
  "wally-config",
  "wally-providers",
