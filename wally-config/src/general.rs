@@ -11,8 +11,8 @@ pub struct GeneralConfig {
     pub output_dir: KdlPath,
 
     /// command to set wallpaper
-    #[facet(kdl::child)]
-    pub set_command: Command,
+    #[facet(kdl::children)]
+    pub set_command: Vec<SetCommand>,
 
     /// maximum number of wallpapers to keep downloaded in the output dir
     #[facet(kdl::child)]
@@ -21,7 +21,7 @@ pub struct GeneralConfig {
 
 #[derive(Facet)]
 #[facet(deny_unknown_fields)]
-pub struct Command {
+pub struct SetCommand {
     #[facet(kdl::argument)]
     pub command: String,
 }

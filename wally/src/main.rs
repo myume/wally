@@ -6,6 +6,7 @@ use std::{
     process::Command,
 };
 use tokio::time::{Duration, sleep, timeout};
+use wally_config::general::SetCommand;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use wally_providers::providers::{
@@ -146,12 +147,8 @@ async fn main() -> anyhow::Result<()> {
         let image_paths = download_wallpapers(wallpaper_urls, provider, &output_dir).await;
         if args.set_wallpaper {
             let selected_image = &image_paths[rand::random_range(..image_paths.len())];
-            set_wallpaper(
-                &config.general.set_command.command,
-                &output_dir,
-                selected_image,
-            )
-            .context("Failed to set wallpaper")?
+            set_wallpaper(&config.general.set_command, &output_dir, selected_image)
+                .context("Failed to set wallpaper")?
         }
     } else {
         wallpaper_urls.iter().for_each(|url| println!("{url}"));
@@ -214,27 +211,41 @@ async fn download_wallpapers(
     downloaded_images
 }
 
-fn set_wallpaper(command: &str, output_dir: &Path, img_path: &Path) -> anyhow::Result<()> {
+fn set_wallpaper(
+    commands: &[SetCommand],
+    output_dir: &Path,
+    img_path: &Path,
+) -> anyhow::Result<()> {
+    for SetCommand { command } in commands {
+        let command = command.replace(
+            "{{path}}",
+            img_path.to_str().expect("path should be valid string"),
+        );
+        let parts: Vec<&str> = command.split(" ").collect();
+
+        let Some(program) = parts.first() else {
+            return Err(anyhow!("Missing program in set command"));
+        };
+
+        eprintln!("Setting wallpaper with command \"{command}\"");
+
+        let output = Command::new(program)
+            .args(&parts[1..])
+            .output()
+            .context("Failed to set wallpaper")?;
+
+        if !output.status.success() {
+            return Err(anyhow!(
+                "Failed to set wallpaper: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+
     eprintln!("Saving metadata...");
     let mut metadata = Metadata::read(output_dir)?;
     metadata.active_wallpaper = img_path.to_path_buf();
     metadata.save(output_dir)?;
-
-    let command = command.replace(
-        "{{path}}",
-        img_path.to_str().expect("path should be valid string"),
-    );
-    let parts: Vec<&str> = command.split(" ").collect();
-
-    let Some(program) = parts.first() else {
-        return Err(anyhow!("Missing program in set command"));
-    };
-
-    eprintln!("Setting wallpaper with command \"{command}\"");
-    Command::new(program)
-        .args(&parts[1..])
-        .output()
-        .context("Failed to set wallpaper")?;
     Ok(())
 }
 

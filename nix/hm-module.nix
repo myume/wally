@@ -5,7 +5,7 @@ self: {
   ...
 }: let
   inherit (lib.modules) mkIf;
-  inherit (lib.types) package str ints path bool enum nullOr;
+  inherit (lib.types) package str ints path bool enum nullOr listOf;
   inherit (lib.options) mkOption mkEnableOption;
   inherit (lib.trivial) boolToString;
 
@@ -61,8 +61,8 @@ self: {
 
           Use {{path}} to substitute where the image path would be.
         '';
-        type = str;
-        example = "swww img {{path}}";
+        type = listOf str;
+        example = ["swww img {{path}}"];
       };
 
       wallhaven = mkOption {
@@ -131,7 +131,7 @@ in {
       text = ''
         general {
             output_dir "${cfg.settings.outputDir}"
-            set_command "${cfg.settings.setCommand}"
+            ${builtins.concatStringsSep "\n\t" (map (command: "set_command \"${command}\"") cfg.settings.setCommand)}
             max_downloaded ${toString cfg.settings.maxDownloaded}
         }
 
